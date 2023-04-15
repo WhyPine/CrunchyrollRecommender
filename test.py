@@ -9,6 +9,8 @@ def read_zstd(path: str): #helps read condensed zst files
     with open(path, "rb") as f:
         return pd.read_csv(zstd.ZstdDecompressor().stream_reader(f))
 
+top100 = []
+
 testo = open('test.txt', 'w')
 
 uservalues = pd.read_csv('profiles.csv') #our actual user profiles
@@ -39,6 +41,21 @@ for show in shows.itertuples(index=True): #first step of making shows to compare
     vector = []
     for i in range(13, 41):
         vector.append(show[i])
-    showmap[show[1]] = (show[2], show[3], show[7], vector)
+    showmap[show[1]] = (show[2], show[6], show[7], vector)
 
 print(len(idmap))
+
+
+
+#print(showmap)
+
+def popular():
+    v = list(showmap.values())
+    v.sort(key=lambda a: (a[1] * a[2]))
+    k = list(showmap.keys())
+    for i in range(0,100):
+        temp = v[len(v) - (1 + i)]
+        print(temp)
+        top100.append(temp)
+
+popular()
