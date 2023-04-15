@@ -3,6 +3,7 @@ import pandas as pd #pandas for dataframes and importing data
 import zstandard as zstd #zstandard lets us read condensed data | works with pandas
 import sklearn as sk #cosine similarity for mass calculation - (super fast)
 import operator as op #should help with iterators | should be used in most popular and trending data sets
+from sklearn.metrics.pairwise import cosine_similarity
 
 
 def read_zstd(path: str): #helps read condensed zst files
@@ -38,16 +39,18 @@ for row in start.itertuples(index=True): #generating a map from starts ids to ti
 showmap = {}
 
 for show in shows.itertuples(index=True): #first step of making shows to compare, vector can be used for cosine similarity but not done yet
-    vector = []
+    genres = np.zeros(28, dtype='int16')
     for i in range(13, 41):
-        vector.append(show[i])
-    showmap[show[1]] = (show[2], show[6], show[7], vector)
+        if show[i]:
+            genres[i-13] = 1
+    #       title         url    weight    rate    genre vectord
+    showmap[show[1]] = (show[2], show[6], show[7], genres)
 
 print(len(idmap))
 
 
 
-#print(showmap)
+print(len(showmap))
 
 def popular():
     v = list(showmap.values())
@@ -59,3 +62,9 @@ def popular():
         top100.append(temp)
 
 popular()
+
+
+
+
+
+
