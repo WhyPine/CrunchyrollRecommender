@@ -63,7 +63,24 @@ def popular():
 
 popular()
 
+# will remain in order
+shownames = list(showmap.keys())
+showgenres = []
+# getting array of genre list
+for value in showmap.values():
+    showgenres.append(value[3])
+showgenres = np.array(showgenres)
+# generating similarity matrix
+genresimilaritymatrix = cosine_similarity(showgenres)
 
+drSTONEsimilarshows = []
+for x in range(1255):
+    drSTONEsimilarshows.append(x)
+# sorting all shows by similarity to dr. STONE genres
+drSTONEsimilarshows.sort(key=lambda x: genresimilaritymatrix[128][x], reverse=True)
+for x in range(10):
+    print(shownames[drSTONEsimilarshows[x]], "similarity =", genresimilaritymatrix[128][drSTONEsimilarshows[x]],  drSTONEsimilarshows[x])
+# genresimilaritymatrix[128]
 
 
 
