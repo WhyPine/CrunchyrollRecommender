@@ -4,6 +4,11 @@ import zstandard as zstd #zstandard lets us read condensed data | works with pan
 import sklearn as sk #cosine similarity for mass calculation - (super fast)
 import operator as op #should help with iterators | should be used in most popular and trending data sets
 from sklearn.metrics.pairwise import cosine_similarity
+# SVD ML recommendation library
+from surprise import SVD, accuracy
+from surprise import Dataset, Reader
+from surprise.model_selection import cross_validate
+from surprise.model_selection.split import train_test_split
 
 
 def read_zstd(path: str): #helps read condensed zst files
@@ -83,5 +88,40 @@ for x in range(10):
 # genresimilaritymatrix[128]
 
 
+# [index, movieid, rating [1-5]]
+# movieRatings = list()
+# for index, row in uservalues.iterrows():
+#     list = row[3].replace("[", "").replace("]", "").replace("'", "").replace (" ", "")
+#     for movie in list.split(','):
+#         try:
+#             movieId = int(movie)
+#         except:
+#             continue
+#         new_entry = pd.DataFrame(columns = ["userId", "movieId", "Rating"])
+#         new_entry.loc[0] = [index, movieId, 5]
+#         movieRatings.append(new_entry)
+#     if index % 100 == 0:
+#         print("index =", index)
+# movieRatings = pd.concat(movieRatings)
+# print(movieRatings)
+
+# movieRatings.to_csv("./transformedfavorites.csv", sep='\t')
+movieRatings = pd.read_csv("./transformedfavorites.csv", sep='\t')
+
+reader = Reader(rating_scale=(1,5))
+data = Dataset.load_from_df(movieRatings[["userId", "movieId", "Rating"]], reader)
 
 
+algo = SVD()
+cross_validate(algo, data, measures=["RMSE", "MAE"], cv=10, verbose=True)
+
+
+# train, test = train_test_split(data, test_size=.2, random_state=42)
+
+# # initial model
+# algo = SVD(random_state = 42)
+# algo.fit(train)
+# pred = algo.test(test)
+
+# # evaluate the rmse result of the prediction and ground thuth
+# accuracy.rmse(pred)
