@@ -9,7 +9,7 @@ from surprise import SVD, accuracy
 from surprise import Dataset, Reader
 from surprise.model_selection import cross_validate
 from surprise.model_selection.split import train_test_split
-
+from surprise.accuracy import rmse
 
 def read_zstd(path: str): #helps read condensed zst files
     with open(path, "rb") as f:
@@ -27,19 +27,21 @@ indepth = read_zstd("anime.csv.zst") #has master list / not all are used as some
 
 shows = pd.read_csv('animes.csv') #all shows and their ratings w/ genre
 
+reviews = pd.read_csv("reviews.csv")
 
+print(reviews)
 print(uservalues)
 print(indepth)
 print(shows)
 
-idmap = {} #our user data contains ids instead of show names, our data just uses names
+animeIdToName = {} #our user data contains ids instead of show names, our data just uses names
 
 for row in start.itertuples(index=True): #generating a map from starts ids to title for later crossreference
-    if (getattr(row, "uid")) not in idmap:
-        idmap[getattr(row, "uid")] = getattr(row, "title")
+    if (getattr(row, "uid")) not in animeIdToName:
+        animeIdToName[getattr(row, "uid")] = getattr(row, "title")
     else: #there are repeat ids, this just makes the ids map to the base title in case of id:show -> id:show season 2
-        if idmap.get(getattr(row, "uid")) in getattr(row, "title"):
-            idmap[getattr(row, "uid")] = getattr(row, "title")
+        if animeIdToName.get(getattr(row, "uid")) in getattr(row, "title"):
+            animeIdToName[getattr(row, "uid")] = getattr(row, "title")
 
 showmap = {}
 
@@ -51,9 +53,8 @@ for show in shows.itertuples(index=True): #first step of making shows to compare
     #       title         url    weight    rate    genre vectord
     showmap[show[1]] = (show[2], show[6], show[7], genres)
 
-print(len(idmap))
-
-
+print(len(animeIdToName))
+print(animeIdToName)
 
 print(len(showmap))
 
@@ -108,20 +109,76 @@ for x in range(10):
 # movieRatings.to_csv("./transformedfavorites.csv", sep='\t')
 movieRatings = pd.read_csv("./transformedfavorites.csv", sep='\t')
 
-reader = Reader(rating_scale=(1,5))
-data = Dataset.load_from_df(movieRatings[["userId", "movieId", "Rating"]], reader)
+# reader = Reader(rating_scale=(1,5))
+# data = Dataset.load_from_df(movieRatings[["userId", "movieId", "Rating"]], reader)
+# data = list()
+# for index, row in reviews.iterrows():
+#     new_entry = pd.DataFrame(columns = ["userId", "animeId", "Rating"])
+#     new_entry.loc[0] = [int(row[0]), int(row[2]), int(row[4])]
+#     data.append(new_entry)
+#     if index%25000 == 0:
+#         print(index)
+# data = pd.concat(data)
+
+def getTopPredictions(predictions, n=10):
+    print("in predictions")
+    # Map predictions to each user
+    result = {}
+    for userId, animeId, rating, estimate, _ in predictions:
+        result[userId].append((animeId, estimate))
+    print("mapped predictions to users")
+    # Now grab top n predictions for each user
+    for userId, estimates in result.items():
+        estimates.sort(key=lambda x: x[1], reverse = True)
+        result[userId] = estimates[:n]
+        print("sorted user", userId)
+
+
+reader = Reader(rating_scale=(1,10))
+reviewsData = Dataset.load_from_df(reviews[["profile", "anime_uid", "score"]], reader)
+
+trainSet = reviewsData.build_full_trainset()
+
+algo = SVD()
+algo.fit(trainSet)
+
+testSet = trainSet.build_testset()
+predictions = algo.test(testSet)
+rmse(predictions)
+
+UserToAnimePredictions = {}
+length = len(uservalues.index)
+for row in uservalues.itertuples():
+    if(row[0]%100 == 0):
+        print(row[0]/length)
+    UserToAnimePredictions[row[1]] = []
+    # row[0] is profile name
+    for animeId in animeIdToName.keys():
+        prediction = algo.predict(row[1], animeId, r_ui=None, verbose=False)
+        UserToAnimePredictions[row[1]].append((prediction[1], prediction[3]))
+    if(row[0] == 500):
+        break
+
+print(UserToAnimePredictions["DesolatePsyche"])
+# x = algo.predict("DesolatePsyche", 38816, r_ui=None, verbose=False) returns tuple [profile, animeID, original value, estimated rating]
+
+
+# for anime in animeIdToName.keys():
+#     for user in userIdToName.keys():
+#         algo.predict(user,anime, r_ui=None,verbose = true)
+
+# The code below takes ages to run :(
+# testSet = trainSet.build_anti_testset()
+# print("built anti-test set")
+# predictions = algo.test(testSet)
+# print("predictions complete", predictions)
+# recommendations = getTopPredictions(predictions, n=10)
+# print(recommendations)
 
 
 algo = SVD()
-cross_validate(algo, data, measures=["RMSE", "MAE"], cv=10, verbose=True)
+reader = Reader(rating_scale=(1,5))
+data = Dataset.load_from_df(movieRatings[["userId", "movieId", "Rating"]], reader)
+cross_validate(algo, data, measures=["RMSE", "MAE"], cv=5, verbose=True)
 
 
-# train, test = train_test_split(data, test_size=.2, random_state=42)
-
-# # initial model
-# algo = SVD(random_state = 42)
-# algo.fit(train)
-# pred = algo.test(test)
-
-# # evaluate the rmse result of the prediction and ground thuth
-# accuracy.rmse(pred)
