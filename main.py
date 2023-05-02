@@ -115,17 +115,6 @@ algo1.fit(trainSet)
 testSet = trainSet.build_testset()
 predictions = algo1.test(testSet)
 rmse(predictions)
-
-# Getting reccomendations from model
-for user in Usernames:
-    UserReccomendations = []
-    for animeId in animeIdToName.keys():
-         prediction = algo1.predict(user, animeId, r_ui=None, verbose=False)
-                               #    animeID        estimated rating
-         UserReccomendations.append((prediction[1], prediction[3]))
-    UserReccomendations.sort(key=lambda x: x[1], reverse = True)
-    UserReccomendations = UserReccomendations[:20]
-    ReccomendationSamples[user].append(UserReccomendations)
 two_time = time.time()
 
 # [3] User-User ML reccomender using SVD and only user favorites
@@ -137,17 +126,6 @@ data = Dataset.load_from_df(movieRatings[["userId", "movieId", "Rating"]], reade
 # Training this time using cross validation
 algo2 = SVD()
 cross_validate(algo2, data, measures=["RMSE", "MAE"], cv=5, verbose=True)
-
-# Getting reccomendations from model
-for user in Usernames:
-    UserReccomendations = []
-    for animeId in animeIdToName.keys():
-         prediction = algo2.predict(user, animeId, r_ui=None, verbose=False)
-                               #    animeID        estimated rating
-         UserReccomendations.append((prediction[1], prediction[3]))
-    UserReccomendations.sort(key=lambda x: x[1], reverse = True)
-    UserReccomendations = UserReccomendations[:20]
-    ReccomendationSamples[user].append(UserReccomendations)
 three_time = time.time()
 
 # [4] User-User ML reccommender using TensorFlow and thousands of user reviews
@@ -246,9 +224,33 @@ def rename_test(x0,x1):
     y["profile"] = x0
     y['anime_uid'] = x1
     return y
+four_time = time.time()
 
-# Getting reccomendations from model
+# [5] Getting results
+
+# Getting reccomendations 
 for user in Usernames:
+    # Reccomendations for model [2]
+    UserReccomendations = []
+    for animeId in animeIdToName.keys():
+         prediction = algo1.predict(user, animeId, r_ui=None, verbose=False)
+                               #    animeID        estimated rating
+         UserReccomendations.append((prediction[1], prediction[3]))
+    UserReccomendations.sort(key=lambda x: x[1], reverse = True)
+    UserReccomendations = UserReccomendations[:20]
+    ReccomendationSamples[user].append(UserReccomendations)
+
+    # Reccomendations for model [3]
+    UserReccomendations = []
+    for animeId in animeIdToName.keys():
+         prediction = algo2.predict(user, animeId, r_ui=None, verbose=False)
+                               #    animeID        estimated rating
+         UserReccomendations.append((prediction[1], prediction[3]))
+    UserReccomendations.sort(key=lambda x: x[1], reverse = True)
+    UserReccomendations = UserReccomendations[:20]
+    ReccomendationSamples[user].append(UserReccomendations)
+
+    # Reccommendations for model [4]
     UserReccomendations = []
     userArray = np.array([user for i in range(len(unique_anime_titles))])
     testData = tf.data.Dataset.from_tensor_slices((tf.cast(userArray.reshape(-1,1), tf.string), tf.cast(unique_anime_titles.reshape(-1,1), tf.string)))
@@ -259,11 +261,11 @@ for user in Usernames:
     for b in sorted(test_ratings, key=test_ratings.get, reverse=True)[:20]:
         UserReccomendations.append((int(tf.compat.as_str_any(b)), float(tf.get_static_value(test_ratings.get(b)))))
     ReccomendationSamples[user].append(UserReccomendations)
-four_time = time.time()
 
-with open("test.json", "w") as file:
+# Saving results to a file
+with open("output.json", "w") as file:
     json.dump(ReccomendationSamples, file, indent=4)
-
+five_time = time.time()
 
 print("Execution Times:")
 print("Reading the data:", int(read_time - start_time), "seconds")
@@ -272,5 +274,6 @@ print("[1] Genre Based Item-Item       :", int(one_time - zero_time), "seconds")
 print("[2] User-User SVD Review-based  :", int(two_time - one_time), "seconds")
 print("[3] User-User SVD favorite-based:", int(three_time - two_time), "seconds")
 print("[4] User-User TF Review-based   :", int(four_time - three_time), "seconds")
+print("[5] Retrieving results:", int(five_time-four_time), "seconds")
 end_time = time.time()
 print("Total Execution Time:", int(end_time - start_time), "seconds")
