@@ -43,11 +43,12 @@ movieRatings = pd.read_csv("./transformedfavorites.csv", sep='\t')
 # print(indepth)
 # print(shows)
 
-# Setting up reccomendation samples
-ReccomendationSamples = {}
+# Setting up Recommendation samples
+RecommendationSamples = {}
+RecommendationSamples["000Example"] = ["Alg2", "Alg3", "Alg4", "Alg23", "Alg34", "Alg24", "Alg234"]
 Usernames = ["DesolatePsyche", "Plasmatize", "ApertureEmployee", "AnthraxHierarchy", "TheAfroNinja", "EpicSawce", "TheAnimeGandalf", "CoolBreeze", "TheFifthRider", "AStupidPotato"]
 for name in Usernames:
-    ReccomendationSamples[name] = []
+    RecommendationSamples[name] = []
 
 
 animeIdToName = {} # Mapping show id's to show names
@@ -59,7 +60,6 @@ for row in start.itertuples(index=True):
     else: #there are repeat ids, this just makes the ids map to the base title in case of id:show -> id:show season 2
         if animeIdToName.get(getattr(row, "uid")) in getattr(row, "title"):
             animeIdToName[getattr(row, "uid")] = getattr(row, "title")
-
 showmap = {}
 
 # Generating dictionary mapping show id to data + building genre vector
@@ -91,6 +91,7 @@ showgenres = np.array(showgenres)
 genresimilaritymatrix = cosine_similarity(showgenres)
 one_time = time.time()
 
+# Sample testing code to find shows similar to dr STONE
 # drSTONEsimilarshows = []
 # for x in range(1255):
 #     drSTONEsimilarshows.append(x)
@@ -117,7 +118,7 @@ predictions = algo1.test(testSet)
 rmse(predictions)
 two_time = time.time()
 
-# [3] User-User ML reccomender using SVD and only user favorites
+# [3] User-User reccomender using SVD and only user favorites
 
 # Setting up algorithm and data 
 reader = Reader(rating_scale=(1,5))
@@ -149,7 +150,7 @@ def rename(x0,x1,x2):
 dataset = dataset.map(rename)
 animes = reviewsData.anime_uid.values
 users = reviewsData.profile.values
-unique_anime_titles = np.unique(list(animes))
+unique_anime_titles = np.unique(list(map(str, list(animeIdToName.keys()))))
 unique_user_ids = np.unique(list(users))
 
 # Model definitions
@@ -215,7 +216,7 @@ logdir = "logs/scalars/" + datetime.now().strftime("%Y%m%d-%H%M%S")
 tensorboard_callback = keras.callbacks.TensorBoard(log_dir=logdir)
 
 # Training, increasing epochs increases computation cost and accuracy
-model.fit(cache_dataset, epochs=1, verbose=1, callbacks=[tensorboard_callback])
+model.fit(cache_dataset, epochs=5, verbose=1, callbacks=[tensorboard_callback])
 
 # Formatting function
 @tf.function
@@ -228,52 +229,81 @@ four_time = time.time()
 
 # [5] Getting results
 
-# Getting reccomendations 
+# Getting Recommendations 
 for user in Usernames:
-    # Reccomendations for model [2]
-    UserReccomendations = []
+    # Getting recommendations for model [2]
+    UserRecommendations_2 = []
     for animeId in animeIdToName.keys():
          prediction = algo1.predict(user, animeId, r_ui=None, verbose=False)
                                #    animeID        estimated rating
-         UserReccomendations.append((prediction[1], prediction[3]))
-    UserReccomendations.sort(key=lambda x: x[1], reverse = True)
-    UserReccomendations = UserReccomendations[:20]
-    ReccomendationSamples[user].append(UserReccomendations)
+         UserRecommendations_2.append((prediction[1], prediction[3]))
+    UserRecommendations_2.sort(key=lambda x: x[0])
 
-    # Reccomendations for model [3]
-    UserReccomendations = []
+    # Getting recommendations for model [3]
+    UserRecommendations_3 = []
     for animeId in animeIdToName.keys():
          prediction = algo2.predict(user, animeId, r_ui=None, verbose=False)
                                #    animeID        estimated rating
-         UserReccomendations.append((prediction[1], prediction[3]))
-    UserReccomendations.sort(key=lambda x: x[1], reverse = True)
-    UserReccomendations = UserReccomendations[:20]
-    ReccomendationSamples[user].append(UserReccomendations)
+         UserRecommendations_3.append((prediction[1], prediction[3]))
+    UserRecommendations_3.sort(key=lambda x: x[0])
 
-    # Reccommendations for model [4]
-    UserReccomendations = []
+    # Getting recommendations for model [4]
+    UserRecommendations_4 = []
     userArray = np.array([user for i in range(len(unique_anime_titles))])
     testData = tf.data.Dataset.from_tensor_slices((tf.cast(userArray.reshape(-1,1), tf.string), tf.cast(unique_anime_titles.reshape(-1,1), tf.string)))
     testData = testData.map(rename_test)
     test_ratings = {}
     for b in testData:
         test_ratings[b['anime_uid'].numpy()[0]] = model.ranking_model((b['profile'],b['anime_uid']))
-    for b in sorted(test_ratings, key=test_ratings.get, reverse=True)[:20]:
-        UserReccomendations.append((int(tf.compat.as_str_any(b)), float(tf.get_static_value(test_ratings.get(b)))))
-    ReccomendationSamples[user].append(UserReccomendations)
+    for b in test_ratings:
+        UserRecommendations_4.append((int(tf.compat.as_str_any(b)), float(tf.get_static_value(test_ratings.get(b)))))
+    UserRecommendations_4.sort(key=lambda x: x[0])
+
+    # Now combining recommendations together
+    UserRecommendations_23 = []
+    UserRecommendations_34 = []
+    UserRecommendations_24 = []
+    UserRecommendations_234 = []
+    for x in range(len(UserRecommendations_2)):
+        showId = UserRecommendations_2[x][0]
+        # Note: alg 3 ratings are 1-5 so we multiply them by 2 to match the other algs
+        # 2 & 3   50/50
+        UserRecommendations_23.append((showId, (UserRecommendations_2[x][1] + 2 * UserRecommendations_3[x][1])/2))
+        # 3 & 4   50/50
+        UserRecommendations_34.append((showId, (2 * UserRecommendations_3[x][1] + UserRecommendations_4[x][1])/2))
+        # 2 & 4   50/50
+        UserRecommendations_24.append((showId, (UserRecommendations_2[x][1] + UserRecommendations_4[x][1])/2))
+        # 2 & 3 & 4   35/30/35
+        UserRecommendations_234.append((showId, ((0.35 * UserRecommendations_2[x][1]) + (0.30 * 2 * UserRecommendations_3[x][1]) + (0.35 * UserRecommendations_4[x][1]))))
+
+    # Adding each reccomendation style's top 20 reccomendations 
+    UserRecommendations_2.sort(key=lambda x: x[1], reverse=True)
+    RecommendationSamples[user].append(UserRecommendations_2[:20])
+    UserRecommendations_3.sort(key=lambda x: x[1], reverse=True)
+    RecommendationSamples[user].append(UserRecommendations_3[:20])
+    UserRecommendations_4.sort(key=lambda x: x[1], reverse=True)
+    RecommendationSamples[user].append(UserRecommendations_4[:20])
+    UserRecommendations_23.sort(key=lambda x: x[1], reverse=True)
+    RecommendationSamples[user].append(UserRecommendations_23[:20])
+    UserRecommendations_34.sort(key=lambda x: x[1], reverse=True)
+    RecommendationSamples[user].append(UserRecommendations_34[:20])
+    UserRecommendations_24.sort(key=lambda x: x[1], reverse=True)
+    RecommendationSamples[user].append(UserRecommendations_24[:20])
+    UserRecommendations_234.sort(key=lambda x: x[1], reverse=True)
+    RecommendationSamples[user].append(UserRecommendations_234[:20])
 
 # Saving results to a file
 with open("output.json", "w") as file:
-    json.dump(ReccomendationSamples, file, indent=4)
+    json.dump(RecommendationSamples, file, indent=4)
 five_time = time.time()
 
 print("Execution Times:")
-print("Reading the data:", int(read_time - start_time), "seconds")
+print("Reading the data                :", int(read_time - start_time), "seconds")
 print("[0] Top 100 Item-Item           :", int(zero_time - read_time), "seconds")
 print("[1] Genre Based Item-Item       :", int(one_time - zero_time), "seconds")
 print("[2] User-User SVD Review-based  :", int(two_time - one_time), "seconds")
 print("[3] User-User SVD favorite-based:", int(three_time - two_time), "seconds")
 print("[4] User-User TF Review-based   :", int(four_time - three_time), "seconds")
-print("[5] Retrieving results:", int(five_time-four_time), "seconds")
+print("[5] Retrieving results          :", int(five_time-four_time), "seconds")
 end_time = time.time()
-print("Total Execution Time:", int(end_time - start_time), "seconds")
+print("Total Execution Time            :", int(end_time - start_time), "seconds")
